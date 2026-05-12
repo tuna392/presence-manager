@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>【管理者用】研究室システム</title>
+    <style>
+        /*  CSS: 画面のデザイン設定  */
+        body { 
+            font-family: "Helvetica Neue", Arial, sans-serif; 
+            background: #f4f1eb; color: #333333; padding: 20px; max-width: 700px; margin: 0 auto; 
+        }
+        h1 { color: #2c3e50; text-align: center; border-bottom: 2px solid #2c3e50; padding-bottom: 10px; }
+        .section { background: #ffffff; padding: 25px; border-radius: 4px; margin-bottom: 25px; border: 1px solid #dcdcdc; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        h2 { margin-top: 0; color: #2c3e50; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px; font-size: 1.3em; }
+        .toggle-wrap { display: flex; align-items: center; gap: 10px; font-weight: bold; }
+
+        /* --- ドラッグ＆ドロップ用のスタイル --- */
+        .drag-item { transition: background-color 0.2s; }
+        /* 掴む部分（三本線）のマウスカーソルを「手」にする */
+        .drag-handle { cursor: grab; color: #bdc3c7; margin-right: 15px; font-size: 1.2em; user-select: none; }
+        .drag-handle:active { cursor: grabbing; }
+        /* ドラッグ中の要素が重なった時に、上に青い線を引いて挿入位置を分かりやすくする */
+        .drag-over-top { border-top: 3px solid #3498db !important; }
+
+        /* --- リストと表のデザイン --- */
+        ul { list-style: none; padding: 0; margin: 0; }
+        li { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #ccc; padding: 12px 0; }
+        
+        .member-info { display: flex; align-items: center; gap: 15px; font-size: 1.1em; }
+        .status-badge { font-size: 0.8em; padding: 3px 8px; border-radius: 12px; font-weight: bold; }
+        .status-zaiseki { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9;}
+        .status-kitaku { background: #f5f5f5; color: #757575; border: 1px solid #e0e0e0;}
+        .time-log { font-size: 0.8em; color: #888; }
+
+        /* --- 追加フォームのエリア --- */
+        .add-area { display: flex; gap: 10px; margin-top: 20px; padding-top: 20px; background: #fafafa; border-radius: 4px; }
+        input[type="text"] { padding: 10px; font-size: 1em; flex-grow: 1; border: 1px solid #ccc; border-radius: 4px; }
+        
+        button { padding: 10px 20px; font-size: 1em; cursor: pointer; background: #2c3e50; color: white; border: none; border-radius: 4px; transition: background 0.2s; }
+        button:hover { background: #1a252f; }
+        button.delete-btn { background: #e74c3c; padding: 6px 12px; font-size: 0.9em; }
+        button.delete-btn:hover { background: #c0392b; }
+
+        /* --- 履歴確認用のエリアのデザイン*/
+        #log-modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+            align-items: center; justify-content: center; z-index: 1000;
+        }
+        .log-modal-content {
+            background: white; padding: 25px; border-radius: 12px;
+            width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2); animation: popIn 0.3s ease;
+        }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .log-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.95em; }
+        .log-table th, .log-table td { border-bottom: 1px solid #ddd; padding: 10px; text-align: left; }
+        .log-table th { background-color: #f8f9fa; color: #2c3e50; }
+        .log-close-btn { margin-top: 20px; padding: 10px; width: 100%; background: #ecf0f1; color:#333; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    </style>
+    </style>
+</head>
+<body>
+
+    <h1>⚙️ 管理者ダッシュボード</h1>
+
+    <div class="section">
+        <h2>メンバー管理と最新ログ</h2>
+        <!-- ここにJavaScriptでメンバーのリストが自動生成されます -->
+        <ul id="admin-member-list">
+            <p style="color: #666; text-align: center;">読み込み中...</p>
+        </ul>
+        <div class="add-area">
+            <input type="text" id="new-member-name" placeholder="新しいメンバーの名前を入力">
+            <button onclick="addMember()">＋ 追加する</button>
+        </div>
+    </div>
+
+
+
+
+    <div class="section">
+        <h2>システム設定</h2>
+        
+        <h3 style="font-size: 1.1em; margin-top: 20px;"> 選択できるステータス</h3>
+        <!-- ここに選択可能なステータスのバッジが並びます -->
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;" id="status-badges-area"></div>
+        
+        <div class="add-area" style="margin-top: 10px; padding-top: 10px;">
+            <input type="text" id="new-status-name" placeholder="例: 実験中, 喫煙, 会議">
+            <button onclick="addStatusOption()">＋ 追加する</button>
+        </div>
+        
+        <hr style="border: 0; border-top: 1px dashed #ccc; margin: 20px 0;">
+
+        <div class="toggle-wrap">
+            <input type="checkbox" id="duration-toggle" onchange="updateSetting()">
+            <label for="duration-toggle">学生画面に「経過時間」を表示する</label>
+        </div>
+
+        <div id="log-modal" onclick="closeLogModal(event)">
+        <div class="log-modal-content" onclick="event.stopPropagation()">
+            <h2 id="log-modal-title" style="margin-top: 0; border-bottom: 2px solid #2c3e50; padding-bottom: 10px;"></h2>
+            <div id="log-list-container"></div>
+            <button class="log-close-btn" onclick="closeLogModal(event, true)">閉じる</button>
+        </div>
+    </div>
+
+    </div>
+
+
+
+    <script>
+        // --- 1. 変数の準備 ---
+        // 画面全体で使い回すデータを保存する箱を用意します
+        let settings = { show_duration: true, status_list: "帰宅,在室" };
+        let statusOptions = []; // ステータスの種類を入れる配列
+        let membersData = [];   // メンバーのデータを入れる配列
+        let draggedIndex = null; // ドラッグ中のメンバーが「何番目か」を覚えておくための変数
+
+        // --- 2. データの読み込み  ---
+        async function loadAdminData() {
+            const list = document.getElementById('admin-member-list');
+            try {
+                // バックエンド(Python)から設定データをもらう
+                const resSet = await fetch('/api/settings');
+                const fetchedSettings = await resSet.json();
+                if (fetchedSettings) settings = fetchedSettings;
+                
+                // もらった設定をもとに、チェックボックスにチェックを入れる
+                document.getElementById('duration-toggle').checked = settings.show_duration;
+                
+                // 文字列("在室,帰宅,食事...")を、カンマで区切って配列(["在室", "帰宅", "食事"])に変換する
+                if (settings.status_list) {
+                    statusOptions = settings.status_list.split(',');
+                } else {
+                    // もし設定が空っぽなら、デフォルトのリストを入れる
+                    statusOptions = ["帰宅", "在室 2508", "7階", "授業or実習", "教員室4413", "学内", "喫煙", "図書館", "食事", "外出"];
+                }
+                renderStatusOptions(); // ステータスバッジを画面に描画
+
+                // バックエンドからメンバー一覧データをもらう
+                const resMem = await fetch('/api/members');
+                membersData = await resMem.json();
+                renderMembers(); // メンバー一覧を画面に描画
+
+            } catch (error) {
+                // 通信に失敗した場合のセーフティネット
+                list.innerHTML = `<p style="color:red; text-align:center;">データの読み込みに失敗しました。</p>`;
+            }
+        }
+
+        // --- 3. 画面の描画（メンバー一覧を作る） ---
+
+        function renderMembers() {
+            const list = document.getElementById('admin-member-list');
+            list.innerHTML = "";
+            
+            membersData.forEach((m, index) => {
+                const badgeClass = m.status === "帰宅" ? "status-kitaku" : "status-zaiseki";
+
+                // 最終更新の時間を計算 
+                let timeStr = "--:--";
+                if (m.updated_at) {
+                    // Vercelの時差バグを防ぎつつ時間を計算
+                    let dStr = m.updated_at;
+                    if (!dStr.endsWith('Z') && !dStr.includes('+')) dStr += 'Z';
+                    const d = new Date(dStr);
+                    timeStr = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                }
+
+                const miniLogHtml = `<span style="background: #e9ecef; padding: 2px 6px; border-radius: 4px; color: #495057;">${timeStr} ${m.status}</span>`;
+
+
+                list.innerHTML += `
+                    <li class="drag-item" draggable="true"
+                        ondragstart="dragStart(event, ${index})"
+                        ondragover="dragOver(event)"
+                        ondragenter="dragEnter(event)"
+                        ondragleave="dragLeave(event)"
+                        ondrop="dragDrop(event, ${index})">
+                        
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <div class="member-info">
+                                <span class="drag-handle">☰</span>
+                                <strong>${m.name}</strong>
+                                <span class="status-badge ${badgeClass}">${m.status}</span>
+                            </div>
+
+                            <div style="font-size: 0.85em; color: #666; margin-left: 35px;">
+                                   最終更新: ${miniLogHtml}
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <button onclick="openLogModal(${m.id}, '${m.name}')" style="background: #3498db; padding: 6px 12px; font-size: 0.9em;">📄 詳細ログ</button>
+                            <button class="delete-btn" onclick="removeMember(${m.id}, '${m.name}')">削除</button>
+                        </div>
+                    </li>
+                `;
+            });
+        }
+
+        // 履歴モーダルを開く・閉じる処理 
+        function openLogModal(id, name) {
+            document.getElementById('log-modal-title').innerText = `${name} さんの今週の記録`;
+            const container = document.getElementById('log-list-container');
+            const member = membersData.find(m => m.id === id);
+            
+            // 履歴データがない場合の処理
+            if (!member || !member.recent_logs || member.recent_logs.length === 0) {
+                container.innerHTML = "<p style='color:#7f8c8d; text-align:center;'>今週の打刻記録はまだありません。</p>";
+            } else {
+                // 履歴データがある場合は、HTMLで表（Table）を作る
+                let tableHTML = `<table class="log-table"><tr><th>日時</th><th>ステータス</th></tr>`;
+                
+                member.recent_logs.forEach(log => {
+                    // 時差バグ対策をして、見やすい「月/日 時:分」の形にする
+                    let dStr = log.timestamp;
+                    if (!dStr.endsWith('Z') && !dStr.includes('+')) dStr += 'Z';
+                    const d = new Date(dStr);
+                    const timeStr = `${d.getMonth()+1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                    
+                    tableHTML += `<tr><td>${timeStr}</td><td><strong>${log.status}</strong></td></tr>`;
+                });
+                tableHTML += `</table>`;
+                container.innerHTML = tableHTML;
+            }
+            
+            document.getElementById('log-modal').style.display = 'flex';
+        }
+
+        function closeLogModal(e, force = false) {
+            if (force || e.target.id === 'log-modal') {
+                document.getElementById('log-modal').style.display = 'none';
+            }
+        }
+
+
+        // --- 4. ドラッグ＆ドロップ処理（並び替え） ---
+        
+        // 要素を掴んだ瞬間
+        function dragStart(e, index) {
+            draggedIndex = index; // 何番目の人を掴んだかを記憶
+            e.dataTransfer.effectAllowed = 'move';
+        }
+        
+        // 他の要素の上を通過している時（ドロップを許可するために必須の処理）
+        function dragOver(e) { e.preventDefault(); }
+        
+        // 他の要素の上にカーソルが乗った瞬間（青い線を出す）
+        function dragEnter(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('drag-over-top');
+        }
+        
+        // 他の要素の上からカーソルが離れた瞬間（青い線を消す）
+        function dragLeave(e) { e.currentTarget.classList.remove('drag-over-top'); }
+        
+        // マウスを離してドロップ（落とした）瞬間
+        async function dragDrop(e, targetIndex) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over-top'); // 青い線を消す
+            
+            // 同じ場所に落とした場合は何もしない
+            if (draggedIndex === targetIndex || draggedIndex === null) return;
+            
+            // JavaScriptの配列の順番を入れ替える（切り取って、別の場所に挿入する）
+            const item = membersData.splice(draggedIndex, 1)[0];
+            membersData.splice(targetIndex, 0, item);
+            draggedIndex = null;
+            
+            renderMembers(); // 画面の見た目を即座に更新する
+            await saveOrder(); // 新しい順番を裏側のデータベースに保存しにいく
+        }
+
+        // 並び替えた新しい順番をバックエンドに教える処理
+        async function saveOrder() {
+            // 現在の配列からIDだけを抜き出したリスト [3, 1, 2...] を作る
+            const orderedIds = membersData.map(m => m.id);
+            await fetch('/api/members', {
+                method: 'PUT', // 更新はPUTメソッドを使う
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ordered_ids: orderedIds })
+            });
+        }
+
+        // --- 5. ステータス追加・削除処理 
+        
+        // ステータスのバッジを画面に並べる
+        function renderStatusOptions() {
+            const area = document.getElementById('status-badges-area');
+            area.innerHTML = "";
+            statusOptions.forEach(status => {
+                area.innerHTML += `
+                    <span style="background: #e0e0e0; padding: 5px 12px; border-radius: 15px; font-size: 0.9em; display: flex; align-items: center; gap: 5px;">
+                        ${status}
+                        <button onclick="removeStatusOption('${status}')" style="background: none; border: none; color: #e74c3c; padding: 0; font-size: 1.2em; line-height: 1; cursor: pointer;">×</button>
+                    </span>
+                `;
+            });
+        }
+
+        // 新しいステータスを追加する
+        async function addStatusOption() {
+            const input = document.getElementById('new-status-name');
+            const newStatus = input.value.trim(); // 余計な空白を消す
+            
+            if(!newStatus) return; // 空っぽなら無視
+            if(statusOptions.includes(newStatus)) return alert("すでに存在します");
+
+            statusOptions.push(newStatus); // 配列に追加
+            input.value = "";              // 入力欄を空に戻す
+            renderStatusOptions();         // 画面を更新
+            await updateSetting();         // バックエンドに保存
+        }
+
+        // ステータスを削除する
+        async function removeStatusOption(statusName) {
+            // システムの基本となる2つは消せないようにブロックする
+            if(statusName === "在室" || statusName === "帰宅") {
+                return alert("「在室」と「帰宅」は基本ステータスのため削除できません。");
+            }
+            // 削除したいステータス「以外」を残すことで削除を実現する
+            statusOptions = statusOptions.filter(s => s !== statusName);
+            renderStatusOptions();
+            await updateSetting();
+        }
+
+        // --- 6. API送信（設定とメンバーの保存・削除） ---
+        
+        // 設定（経過時間フラグとステータス一覧）を保存する
+        async function updateSetting() {
+            const isChecked = document.getElementById('duration-toggle').checked;
+            // 配列 ["在室", "帰宅"] を文字列 "在室,帰宅" に戻して保存する
+            const joinedStatus = statusOptions.join(',');
+            
+            await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ show_duration: isChecked, status_list: joinedStatus })
+            });
+        }
+
+        // 新しいメンバーを保存する
+        async function addMember() {
+            const nameInput = document.getElementById('new-member-name');
+            const name = nameInput.value;
+            if (!name) return alert("名前を入力してください！");
+            
+            // バックエンドに登録のお願いをする
+            await fetch('/api/members', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, is_admin: false })
+            });
+            nameInput.value = ""; 
+            await loadAdminData(); // 登録に成功したら、最新のデータを読み込み直して画面に反映する
+        }
+
+        // メンバーをデータベースから削除する
+        async function removeMember(id, name) {
+            // 間違えて押した時のために確認アラートを出す
+            if (!confirm(`本当に「${name}」さんを削除しますか？\n※この操作は取り消せません。`)) return;
+            
+            // 削除はDELETEメソッドと、URLの後ろの ?id=数値 で対象を伝える
+            await fetch(`/api/members?id=${id}`, { method: 'DELETE' });
+            await loadAdminData(); // 削除後、画面を最新に更新する
+        }
+
+        // --- 7. スタート地点 ---
+        // HTMLの読み込みがすべて終わったら、一番最初に「loadAdminData」を実行する
+        document.addEventListener("DOMContentLoaded", loadAdminData);
+    </script>
+</body>
+</html>

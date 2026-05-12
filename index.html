@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>在席管理ボード</title>
+
+
+    <style>
+
+        /* 1. 全体のデザイン設定 (CSS)*/
+        body {
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #333; margin: 0; padding: 20px;
+            -webkit-tap-highlight-color: transparent; /* タップ時の青い半透明のハイライトを消す */
+        }
+
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 30px; }
+
+        /* メンバーのカードを並べるグリッド */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 15px; max-width: 1000px; margin: 0 auto;
+        }
+
+
+        /* 個別のメンバーカードのデザイン */
+        .member-card {
+            background: #ffffff; border-radius: 14px; padding: 20px 10px;
+            text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            cursor: pointer; transition: all 0.2s ease; user-select: none;
+            border: 3px solid #ccc; 
+        }
+        /* カードをタップした瞬間に少し縮むアニメーション（押した感触を出す） */
+        .member-card:active { transform: scale(0.95); }
+        
+        .member-name { font-size: 1.2em; font-weight: bold; margin-bottom: 8px; color: #2c3e50; }
+        .status-label {
+            display: inline-block; padding: 4px 12px; border-radius: 20px;
+            font-size: 0.9em; font-weight: bold; margin-bottom: 8px; color: white;
+        }
+        .duration-text { font-size: 0.75em; color: #7f8c8d; height: 1.2em; letter-spacing: -0.5px; }
+        .admin-link { display: block; text-align: center; margin-top: 50px; color: #bdc3c7; text-decoration: none; font-weight: bold;}
+
+        /*  2. モーダル（ポップアップ画面）のデザイン */
+        #status-modal {
+            display: none; /* 初期状態は隠しておく */
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); /* 背景を少しぼかすお洒落エフェクト */
+            align-items: center; justify-content: center; z-index: 1000;
+        }
+
+
+        .modal-content {
+            background: white; padding: 30px; border-radius: 20px;
+            width: 90%; max-width: 450px; text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            animation: popIn 0.3s ease; /* 下で定義したpopInアニメーションを0.3秒で実行 */
+        }
+
+        .presents-text {
+        position: fixed;     /* 画面の右下に固定 */
+        bottom: 10px;        /* 下からの距離 */
+        right: 15px;         /* 右からの距離 */
+        font-size: 10px;     /* めっちゃ小さく */
+        color: #bdc3c7;      /* 目立たない薄いグレー */
+        letter-spacing: 1px; /* 文字の間隔を少し開けてオシャレに */
+        user-select: none;   /* タップしてもハイライトされないようにする */
+        z-index: 100;        /* 他の要素の下に隠れないようにする */
+        }
+
+
+        
+        /* ポップアップがフワッと拡大しながら現れるアニメーション */
+        @keyframes popIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .modal-title { font-size: 1.3em; font-weight: bold; margin-bottom: 20px; color: #2c3e50; }
+        
+        .status-btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .status-btn {
+            padding: 15px; font-size: 1.1em; font-weight: bold; color: white;
+            border: none; border-radius: 12px; cursor: pointer; transition: opacity 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .status-btn:active { opacity: 0.7; transform: translateY(2px); }
+        .cancel-btn {
+            margin-top: 25px; padding: 15px; width: 100%; background: #ecf0f1;
+            color: #34495e; border: none; border-radius: 12px; font-weight: bold; font-size: 1.1em; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🏢 在席管理ボード</h1>
+    <!-- JavaScriptがメンバーのカードを生成して、この中（board-container）に流し込む -->
+    <div class="grid-container" id="board-container"></div>
+    <a href="admin.html" class="admin-link">⚙️ 管理画面へ</a>
+
+    <!-- ステータス変更用のポップアップ（クリックで閉じる機能付き） -->
+    <div id="status-modal" onclick="closeModal(event)">
+        <!-- event.stopPropagation() で、白い箱の中をクリックした時は閉じないようにする -->
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-title"><span id="modal-user-name"></span> の状況を変更</div>
+            <div class="status-btn-grid" id="modal-btn-grid">
+                <!-- ここにJavaScriptでボタンが自動生成される -->
+            </div>
+            <button class="cancel-btn" onclick="closeModal(event, true)">キャンセル</button>
+        </div>
+    </div>
+
+    <div class="presents-text">presented by 石川</div>
+
+    <!-- 3. 裏側で動く処理 (JavaScript)-->
+    <script>
+        let settings = { show_duration: true, status_list: "帰宅,在室 2508" };
+        let membersData = [];
+        let activeMemberId = null; // 現在ポップアップで操作している人のIDを記憶する
+
+        // --- 全ステータスに対応したカラーパレット ---
+        function getStatusColor(status) {
+            if (status === "在室 2508") return "#2ecc71"; // 明るい緑（メイン）
+            if (status === "7階") return "#1abc9c"; // ターコイズ
+            if (status === "学内") return "#27ae60"; // 濃い緑
+            if (status === "教員室4413") return "#e74c3c"; // 赤
+            if (status === "授業or実習") return "#f1c40f"; // 黄色
+            if (status === "図書館") return "#8e44ad"; // 紫
+            if (status === "食事") return "#f39c12"; // オレンジ
+            if (status === "外出") return "#3498db"; // 青
+            if (status === "喫煙") return "#7f8c8d"; // 濃いグレー
+            if (status === "帰宅") return "#bdc3c7"; // 薄いグレー
+            
+            // 予期せぬ新しいステータスが追加された時の安全装置
+            // 文字のコードを計算して、その文字専用の「ランダムだけど毎回同じ色」を自動生成する
+            const hash = [...status].reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            const hue = hash % 360;
+            return `hsl(${hue}, 60%, 50%)`;
+        }
+
+        // --- Vercel特有の時差バグを直す関数 ---
+        function parseVercelDate(dateStr) {
+            if (!dateStr) return null;
+            // バックエンドから来た時間に 'Z' (UTCの印) が無い場合、無理やり付けて日本時間とのズレを防ぐ
+            if (!dateStr.endsWith('Z') && !dateStr.includes('+')) {
+                dateStr += 'Z'; 
+            }
+            return new Date(dateStr);
+        }
+
+        // --- 起動時の処理 ---
+        // 画面のHTMLがすべて読み込まれたら実行される
+        document.addEventListener("DOMContentLoaded", () => {
+            loadBoardData();
+            setInterval(loadBoardData, 60000); // 1分(60000ミリ秒)ごとに画面の時間を更新する
+        });
+
+        // --- データの取得 ---
+        async function loadBoardData() {
+            try {
+                // 設定とメンバーのデータを同時に取りに行く（Promise.all）
+                const [resSet, resMem] = await Promise.all([ fetch('/api/settings'), fetch('/api/members') ]);
+                settings = await resSet.json();
+                membersData = await resMem.json();
+                renderBoard(); // データが取れたら画面を描画
+            } catch (error) {
+                document.getElementById('board-container').innerHTML = `<p style="color:red; text-align:center;">データの読み込みに失敗しました。</p>`;
+            }
+        }
+
+        // --- 画面の描画 ---
+        function renderBoard() {
+            const container = document.getElementById('board-container');
+            container.innerHTML = ""; // 一旦クリア
+
+            membersData.forEach(m => {
+                const color = getStatusColor(m.status);
+                const opacity = m.status === "帰宅" ? "0.5" : "1"; // 帰宅中ならカード全体を半透明にして目立たなくする
+                const bgLight = `${color}15`; // 背景色をステータスカラーの15%の濃さに設定する
+
+                let durationString = "";
+                // 設定がON ＆ バックエンドが計算した週の合計分数(weekly_minutes)があれば計算
+                if (settings.show_duration && m.weekly_minutes !== undefined) {
+                    const h = Math.floor(m.weekly_minutes / 60); // 60で割って「時間」を出す
+                    const min = m.weekly_minutes % 60;           // 60で割った余りで「分」を出す
+                    durationString = `今週: ${h}時間${min}分`;
+                }
+
+                // カードのHTMLを組み立てて画面に追加（クリックされたら openModal を実行）
+                container.innerHTML += `
+                    <div class="member-card" style="border-color: ${color}; background-color: ${bgLight}; opacity: ${opacity};" onclick="openModal(${m.id}, '${m.name}')">
+                        <div class="member-name">${m.name}</div>
+                        <div class="status-label" style="background-color: ${color};">${m.status}</div>
+                        <div class="duration-text">${durationString}</div>
+                    </div>
+                `;
+            });
+        }
+
+
+        // --- モーダルの開閉処理 ---
+        function openModal(id, name) {
+            activeMemberId = id; // 誰がクリックされたかを記憶
+            document.getElementById('modal-user-name').innerText = name; // タイトルに名前を入れる
+            
+            const grid = document.getElementById('modal-btn-grid');
+            grid.innerHTML = "";
+            // 管理画面で設定されたステータス一覧の配列を作る
+            const statusOptions = settings.status_list ? settings.status_list.split(',') : ["帰宅", "在室 2508"];
+            
+            // ステータスの数だけボタンを自動生成する
+            statusOptions.forEach(status => {
+                const color = getStatusColor(status);
+                grid.innerHTML += `
+                    <button class="status-btn" style="background-color: ${color};" onclick="selectStatus('${status}')">
+                        ${status}
+                    </button>
+                `;
+            });
+
+            document.getElementById('status-modal').style.display = 'flex'; // ポップアップを表示
+        }
+
+        function closeModal(e, force = false) {
+            // 背景の黒い部分がクリックされたか、キャンセルボタンが押された時だけ閉じる
+            if (force || e.target.id === 'status-modal') {
+                document.getElementById('status-modal').style.display = 'none';
+            }
+        }
+
+        // --- ステータスが選択された時の処理 ---
+        async function selectStatus(newStatus) {
+            document.getElementById('status-modal').style.display = 'none'; // タップした瞬間にポップアップを閉じる
+            
+            const targetMember = membersData.find(m => m.id === activeMemberId);
+            if (!targetMember || targetMember.status === newStatus) return; // 同じステータスなら何もしない
+
+            // サーバーからの返事を待たずに、先に手元の画面(JavaScript)だけを書き換えて更新する。
+            targetMember.status = newStatus;
+            targetMember.updated_at = new Date().toISOString(); 
+            renderBoard(); 
+
+            // 画面を更新した後に、裏側でコッソリとバックエンドに保存のお願い(fetch)をする
+            try {
+                await fetch('/api/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: activeMemberId, status: newStatus })
+                });
+                // 本当はここで loadBoardData() を呼ぶと安全だが、サクサク感を優先してここでは呼ばない
+            } catch (err) {
+                console.error("更新エラー", err);
+                // もし通信エラーが起きたら、画面が嘘をついている状態なので、リロードして正しい状態に戻す
+                loadBoardData();
+            }
+        }
+    </script>
+</body>
+</html>
