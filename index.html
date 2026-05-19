@@ -129,9 +129,10 @@
             if (status === "図書館") return "#8e44ad"; // 紫
             if (status === "食事") return "#f39c12"; // オレンジ
             if (status === "外出") return "#3498db"; // 青
-            if (status === "喫煙") return "#7f8c8d"; // 濃いグレー
+            if (status === "喫煙") return "#a0522d"; // 濃いグレー
             if (status === "帰宅") return "#bdc3c7"; // 薄いグレー
-            
+            if (status === "外研") return "#95a5a6";//グレー系で目立たない色
+
             // 予期せぬ新しいステータスが追加された時の安全装置
             // 文字のコードを計算して、その文字専用の「ランダムだけど毎回同じ色」を自動生成する
             const hash = [...status].reduce((acc, char) => acc + char.charCodeAt(0), 0);
@@ -150,10 +151,31 @@
         }
 
         // --- 起動時の処理 ---
-        // 画面のHTMLがすべて読み込まれたら実行される
+        function getRefreshInterval() {
+            const hour = new Date().getHours();
+            
+            // 夜間モード: 22時〜翌朝8時までは、2時間に1回（7200000ミリ秒）にする
+            if (hour >= 22 || hour < 8) {
+                return 7200000;
+            }
+            // 昼間モード: 8時〜22時までは、15分に1回（900000ミリ秒）にする
+            return 900000; 
+        }
+
+        function scheduleNextRefresh() {
+            const interval = getRefreshInterval();
+            setTimeout(() => {
+                // 時間が来たらデータを読み込み直す
+                loadBoardData();
+                // 読み込み終わったら、また次のタイマーをセットする（ループ）
+                scheduleNextRefresh();
+            }, interval);
+        }
+
+
         document.addEventListener("DOMContentLoaded", () => {
             loadBoardData();
-            setInterval(loadBoardData, 60000); // 1分(60000ミリ秒)ごとに画面の時間を更新する
+            scheduleNextRefresh(); 
         });
 
         // --- データの取得 ---

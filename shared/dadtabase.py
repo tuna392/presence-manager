@@ -9,7 +9,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 # Vercelなどの環境変数から、データベースのURL（接続パスワードのようなもの）を取得する
 raw_url = os.environ.get("POSTGRES_URL")
 
-# 【重要】VercelのPostgreSQL特有の仕様への対応
+# VercelのPostgreSQL特有の仕様への対応
 # URLが "postgres://" で始まっている場合、SQLAlchemyが読み込めるように "postgresql://" に変換する
 DB_URL = raw_url.replace("postgres://", "postgresql://", 1) if raw_url else None
 

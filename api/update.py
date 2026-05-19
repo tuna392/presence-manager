@@ -22,7 +22,7 @@ def update_status(data: StatusUpdate, db: Session = Depends(get_db)):
     member.status = data.status
     member.updated_at = datetime.now()
 
-    # 3. 【履歴（ログ）の保存】※週の滞在時間計算のために超重要！
+    # 3. 【履歴（ログ）の保存】
     # 誰が(member_id)、いつ(timestamp)、何になったか(status)を、履歴テーブル（lab_status_logs）に記録する
     new_log = DBStatusLog(
         member_id=data.id, 
